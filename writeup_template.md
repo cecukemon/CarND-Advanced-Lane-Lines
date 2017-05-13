@@ -15,7 +15,12 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[image1]: ./img_for_writeup/undist.jpg "Undistorted"
+[image1]: ./img_for_writeup/undist.jpg "Undistorted calibration image"
+[image2]: ./img_for_writeup/frame_calib.png "Undistorted video frame"
+[image3]: ./img_for_writeup/frame_grad_x.png "Threshholding gradient in X"
+[image4]: ./img_for_writeup/frame_color_t.png "Threshholding color"
+[image5]: ./img_for_writeup/frame_threshholded.png "Threshholding combined"
+
 
 [video1]: ./project_video.mp4 "Video"
 
@@ -32,17 +37,23 @@ The calibration code is in the calibrate_camera() function. First, I computed th
 
 Then I iterated over the directory with the calibration images, transforming each image to grayscale and using cv2.findChessboardCorners to detect chessboard corners. Some images did not successfully detect corners, I skipped those. If corners were detected, I appended those to the array imgpoints, and appended the precomputed, ideal corner coordinates to the array worldpoints.
 
-Finally, I used cv2.calibrateCamera to calibrate the camera, and cv2.getOptimalNewCameraMatrix to compute a camera matrix that I will later use to undistort images. This is an example of an undistorted calibration image:
+Finally, I used cv2.calibrateCamera to calibrate the camera, and cv2.getOptimalNewCameraMatrix to compute a camera matrix that I will later use to undistort images. This is an example of an distortion-corrected calibration image:
 
 ![alt text][image1]
 
 ###Pipeline (single images)
 
 ####1. Provide an example of a distortion-corrected image.
-To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
+
+The distortion correction on the video frames happens in the process_image function. I call cv2.undistort on the frame, using the parameters computed during the camera calibration phase. Here's an example of the distortion-corrected image:
+
 ![alt text][image2]
+
+
 ####2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+
+
+
 
 ![alt text][image3]
 
