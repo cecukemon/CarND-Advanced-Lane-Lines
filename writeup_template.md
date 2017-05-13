@@ -110,10 +110,13 @@ Here's a [link to my video result](./output_2.mp4)
 
 Steps where I had issues:
 - wasted a lot of time debugging issues due to wrong file format because I had saved some test frames as PNG instead of JPG, and the alpha channel made for some weird bugs
-- had some problems figuring out the perspective transform step
+- had some problems figuring out the perspective transform steps
 
 
 Things that could be improved:
 - pickle and save camera calibration data between program runs to save time (I'm working on an antique Macbook air)
 - understand why the camera calibration on real images leads to weird color
+- try more treshholding parameters and combinations of filters and optimize the rsult
+- the perspective transform results are suboptimal
+- didn't have time to implement a class to keep track of relevant parameters between frames
 
