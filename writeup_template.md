@@ -52,10 +52,18 @@ The distortion correction on the video frames happens in the process_image funct
 
 ####2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
+For the threshholding, I wrote a function threshholding that makes a grayscale copy of the input image, and precomputes the Sobel kernel in x and y, then calls various other threshholding functions to compute different versions of the threshholding. The resulting images are then combined for the final result. I tried gradient threshholding in x and y direction (function abs_sobel_thresh), threshholding by gradient magnitude (mag_threshhold), threshholding by gradient direction (dir_threshhold) and finally, threshholding by color gradient on the S (saturation) channel (color_threshhold)
 
+All those functions have the same basic structure: they compute the threshhold gradient, initialize an empty (black) image in the right size, then set those pixels that fall between the given threshhold boundaries, to one.
 
-
+Here's an example of threshholding gradient in X:
 ![alt text][image3]
+
+Here's an example of threshholding color:
+![alt text][image4]
+
+Here's an example of the combined images:
+![alt text][image5]
 
 ####3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
