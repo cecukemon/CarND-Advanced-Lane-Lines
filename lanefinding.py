@@ -11,6 +11,7 @@ from moviepy.editor import VideoFileClip
 # print debug output
 DEBUG = 0
 
+# checkboard for calibration:
 # number of corners in X direction
 NX = 9
 # number of corners in Y direction
@@ -91,85 +92,277 @@ def calibrate_camera():
 
 def unwarp_picture(img):
 
-  # transform undistorted pic to grayscale:
-  img_gray = cv2.cvtColor(img_undist, cv2.COLOR_BGR2GRAY)
   # save shape info for later:
-  imgshape = img_gray.shape[::-1]
+  imgshape = img.shape[::-1]
 
-  # source:
-  src = np.float32([ [315,685], [565,455], [700,455], [1130,685] ])
-  # destination: fit unwarped picture nicely to img format
-  offset = 90
-  dst = np.float32([[offset, offset], [imgshape[0] - offset, offset], 
-                                     [imgshape[0] - offset, imgshape[1] - offset], 
-                                     [offset, imgshape[1] - offset]])
+  # source - coordinates taken from still frame with straight road part:
+  src = np.float32([ [560,460], [730,460], [1100,680], [230,680]])
+  dst = np.float32([ [230,460], [1100,460], [1100,680], [230,680]])
 
+  # calculate transformation matrix
   M = cv2.getPerspectiveTransform(src, dst)
-  warped = cv2.warpPerspective(img_undist, M, imgshape)
+  # calculate the inverse matrix as well, going to need this later
+  Minv = cv2.getPerspectiveTransform(dst, src)
+  # warp the image
+  warped = cv2.warpPerspective(img, M, imgshape)
 
-  return(warped, M)
+  return (warped, M, Minv)
 
-def detect_lane_pixels(img):
-    img = np.copy(img)
-    # Convert to HSV color space and separate the V channel
-    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HLS).astype(np.float)
-    l_channel = hsv[:,:,1]
-    s_channel = hsv[:,:,2]
-    # Sobel x
-    sobelx = cv2.Sobel(l_channel, cv2.CV_64F, 1, 0) # Take the derivative in x
-    abs_sobelx = np.absolute(sobelx) # Absolute x derivative to accentuate lines away from horizontal
-    scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
-    
-    # Threshold x gradient
-    sxbinary = np.zeros_like(scaled_sobel)
-    sxbinary[(scaled_sobel >= sx_thresh[0]) & (scaled_sobel <= sx_thresh[1])] = 1
-    
-    # Threshold color channel
-    s_binary = np.zeros_like(s_channel)
-    s_binary[(s_channel >= s_thresh[0]) & (s_channel <= s_thresh[1])] = 1
-    # Stack each channel
-    # Note color_binary[:, :, 0] is all 0s, effectively an all black image. It might
-    # be beneficial to replace this channel with something else.
-    color_binary = np.dstack(( np.zeros_like(sxbinary), sxbinary, s_binary))
-    return color_binary
+# threshholding - directional gradient
+def abs_sobel_thresh(direction, sobelx, sobely, thresh):
+
+    if direction == 'x':
+        abs_sobel = np.copy(sobelx)
+    if direction == 'y':
+        abs_sobel = np.copy(sobely)
+
+    rescaled = np.uint8(255 * abs_sobel / np.max(abs_sobel))
+
+    # initialize all-black image
+    img_out = np.zeros_like(rescaled)
+
+    # set all pixels that are between the threshhold min and max values to 255 (white)
+    img_out[(rescaled >= thresh[0]) & (rescaled <= thresh[1])] = 255
+
+    return img_out
+
+# threshholding - gradient magnitude
+def mag_threshhold(sobelx, sobely, thresh):
+
+    grad = np.sqrt(sobelx**2 + sobely**2)
+
+    scale = np.max(grad)/255 
+    grad = (grad / scale).astype(np.uint8) 
+
+    # see comments in abs_sobel_thresh
+    img_out = np.zeros_like(grad)
+    img_out[(grad >= thresh[0]) & (grad <= thresh[1])] = 255
+
+    return img_out
+
+# threshholding - gradient direction
+def dir_threshold(sobelx, sobely, thresh):
+
+    absgraddir = np.arctan2(np.absolute(sobely), np.absolute(sobelx))
+
+    # see comments in abs_sobel_thresh
+    img_out =  np.zeros_like(absgraddir)
+    img_out[(absgraddir >= thresh[0]) & (absgraddir <= thresh[1])] = 255
+
+    return img_out
+
+# threshholding - color gradient, S channel (saturation)
+def color_threshhold_s(img, thresh):
+
+  # convert to HLS color space
+  hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
+  s_channel = hls[:,:,2]
+
+  # initialize empty (black) image
+  img_out = np.zeros_like(s_channel)
+  # and set all pixels that fall between threshhold boundaries
+  img_out[(s_channel >= thresh[0]) & (s_channel <= thresh[1])] = 255
+
+  return img_out
+
+def threshholding(img):
+    img2 = np.copy(img)
+
+    # turn image into greyscale
+    gray_x = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
+    gray_y = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
+    #cv2.imwrite('frame_gray.jpg',gray)
+
+    # sobel kernel size, larger is smoother
+    ksize = 3
+
+    # preprocess sobel kernel on grayscale image for both directions
+    sx = cv2.Sobel(gray_x, cv2.CV_64F, 1, 0, ksize)
+    sy = cv2.Sobel(gray_y, cv2.CV_64F, 0, 1, ksize)
+
+    # calculate images with various threshhold filters
+    # threshhold gradient x / gradient y
+    grad_x = abs_sobel_thresh('x', sx, sy, thresh=(20, 100))
+    grad_y = abs_sobel_thresh('y', sx, sy, thresh=(20, 100))
+    # threshhold magniture
+    mag_t = mag_threshhold(sx, sy, thresh=(20, 100))
+    # threshhold direction
+    dir_t = dir_threshold(sx, sy, thresh=(0.7, 1.3))
+
+    #cv2.imwrite('frame_grad_x.png',grad_x)
+    #cv2.imwrite('frame_grad_y.png',grad_y)
+    #cv2.imwrite('frame_mag_t.png', mag_t)
+    #cv2.imwrite('frame_dir_t.png', dir_t)
+
+    # and combine the filters for a better result:
+    combined = np.zeros_like(dir_t)
+    combined[((grad_x == 255) & (grad_y == 255)) | ((mag_t == 255) & (dir_t == 255))] = 255
+
+    color_t = color_threshhold_s(img2, thresh=(170,255))
+
+    cv2.imwrite('frame_color_t.png', color_t)
+
+    # combine with color threshhold result:
+    combined2 = np.zeros_like(dir_t)
+    combined2[(combined == 255) | (color_t == 255)] = 255
+
+    return combined2
+
+def find_lines(binary_warped):
+
+  # calculate histogram on lower half of image to find the peaks (lots of white pixels)
+  index = np.int(binary_warped.shape[0]/2)
+  histogram = np.sum(binary_warped[index:,:], axis=0)
+
+  # prepare empty output image
+  out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
+
+  # find the left and right peaks
+  midpoint = np.int(histogram.shape[0]/2)
+  leftx_base = np.argmax(histogram[:midpoint])
+  rightx_base = np.argmax(histogram[midpoint:]) + midpoint
+
+  # setup sliding windows
+  nwindows = 9
+  window_height = np.int(binary_warped.shape[0]/nwindows)
+  nonzero = binary_warped.nonzero()
+  nonzeroy = np.array(nonzero[0])
+  nonzerox = np.array(nonzero[1])
+  leftx_current = leftx_base
+  rightx_current = rightx_base
+  margin = 100
+  minpix = 50
+  left_lane_inds = []
+  right_lane_inds = []
+
+  # iterate over windows array:
+  for window in range(nwindows):
+    win_y_low = binary_warped.shape[0] - (window+1)*window_height
+    win_y_high = binary_warped.shape[0] - window*window_height
+    win_xleft_low = leftx_current - margin
+    win_xleft_high = leftx_current + margin
+    win_xright_low = rightx_current - margin
+    win_xright_high = rightx_current + margin
+    cv2.rectangle(out_img,(win_xleft_low,win_y_low),(win_xleft_high,win_y_high),(0,255,0), 2) 
+    cv2.rectangle(out_img,(win_xright_low,win_y_low),(win_xright_high,win_y_high),(0,255,0), 2) 
+    good_left_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xleft_low) & (nonzerox < win_xleft_high)).nonzero()[0]
+    good_right_inds = ((nonzeroy >= win_y_low) & (nonzeroy < win_y_high) & (nonzerox >= win_xright_low) & (nonzerox < win_xright_high)).nonzero()[0]
+    left_lane_inds.append(good_left_inds)
+    right_lane_inds.append(good_right_inds)
+    if len(good_left_inds) > minpix:
+        leftx_current = np.int(np.mean(nonzerox[good_left_inds]))
+    if len(good_right_inds) > minpix:        
+        rightx_current = np.int(np.mean(nonzerox[good_right_inds]))
+
+  left_lane_inds = np.concatenate(left_lane_inds)
+  right_lane_inds = np.concatenate(right_lane_inds)
+
+  leftx = nonzerox[left_lane_inds]
+  lefty = nonzeroy[left_lane_inds] 
+  rightx = nonzerox[right_lane_inds]
+  righty = nonzeroy[right_lane_inds] 
+
+  # fit polynomial to left and right detected pixels:
+  left_fit = np.polyfit(lefty, leftx, 2)
+  right_fit = np.polyfit(righty, rightx, 2)
+
+  return (left_fit, right_fit)
+
+def measure_curvature(left_fit, right_fit):
+
+  ploty = np.linspace(0, 719, num=720)
+  quadratic_coeff = 3e-4
+
+  leftx = np.array([200 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51) 
+                              for y in ploty])
+  rightx = np.array([900 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51) 
+                                for y in ploty])
+
+  leftx = leftx[::-1]
+  rightx = rightx[::-1]
+
+  ym_per_pix = 30/720
+  xm_per_pix = 3.7/700
+
+  #left_fit = np.polyfit(ploty, leftx, 2)
+  #left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
+  #right_fit = np.polyfit(ploty, rightx, 2)
+  #right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+
+  left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
+  left_fitx = left_fit_cr[0]*ploty**2 + left_fit_cr[1]*ploty + left_fit[2]
+  right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
+  right_fitx = right_fit_cr[0]*ploty**2 + right_fit_cr[1]*ploty + right_fit[2]
 
 
+  y_eval = np.max(ploty)
+  #left_curverad = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
+  #right_curverad = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
+
+
+  
+  left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+  right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+
+
+
+  return(ploty, left_fitx, right_fitx)
+
+def draw_lane_on_image(original_image, warped_image, ploty, left_fitx, right_fitx, Minv):
+
+  # prepare empty (black) warped image:
+  warp_zero = np.zeros_like(warped_image).astype(np.uint8)
+  color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+
+  # transform x and y lane boundaries so they can be used with fillPoly
+  pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+  pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+  pts = np.hstack((pts_left, pts_right))
+
+  # draw lane poly:
+  cv2.fillPoly(color_warp, np.int_([pts]), (0,255,0))
+
+  # use the inverse transformation matrix to unwarp the image
+  newwarp = cv2.warpPerspective(color_warp, Minv, (original_image.shape[1], original_image.shape[0])) 
+  # combine lane poly with the original image:
+  result = cv2.addWeighted(original_image, 1, newwarp, 0.3, 0)
+
+  return result
 
 def process_image(image):
 
-    # use camera calibration parameters to undistort picture:
-  img_undist = cv2.undistort(img, mtx, dist, newcameramtx)
+  # use camera calibration parameters to undistort picture:
+  img_undist = cv2.undistort(image, mtx, dist, newcameramtx)
 
-  image2 = detect_lane_pixels
-  (image3, M) = unwarp_picture(image2)
+  #cv2.imwrite('frame_calib.png', img_undist)
 
-  return image3
+  # Threshholding
+  image2 = threshholding(img_undist)
+
+  #cv2.imwrite('frame_threshholded.png',image2)
+
+  # Perspective transform lane lines to straighten them
+  (image3, M, Minv) = unwarp_picture(image2)
+
+  (left_fit, right_fit) = find_lines(image3)
+  (ploty, left_fitx, right_fitx) = measure_curvature(left_fit, right_fit)
+
+  #img_test = cv2.cvtColor(img_undist, cv2.COLOR_RGB2GRAY)
+  image4 = draw_lane_on_image(img_undist, image3, ploty, left_fitx, right_fitx, Minv)
+
+  return image4
 
 ### MAIN ###
 
 # Calibrate camera:
 mtx, dist, newcameramtx = calibrate_camera()
 
-
-#vidcap = cv2.VideoCapture('project_video.mp4')
-#success,image = vidcap.read()
-#cv2.imwrite("frame.jpg" , image) 
-
-#success = True
-#while success:
-#  success,image = vidcap.read()
-
-output_filename = 'output.mp4'
+# read and process video:
 clip1 = VideoFileClip("project_video.mp4")
 output_clip = clip1.fl_image(process_image)
-output_clip.write_videofile(output_filename, audio=False)
 
-# ...
-# iterate over video images
-#   [x] unwarp each frame
-#   [ ] apply sobel and color correction to create threshholded binary image
-#   [ ] perspective transform
-#   [ ] identify lane pixels and fit with polynomial
+# write processed video with lane lines:
+output_clip.write_videofile('output.mp4', audio=False)
 
 
 
