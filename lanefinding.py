@@ -262,61 +262,45 @@ def find_lines(binary_warped):
   rightx = nonzerox[right_lane_inds]
   righty = nonzeroy[right_lane_inds] 
 
-  # fit polynomial to left and right detected pixels:
-  left_fit = np.polyfit(lefty, leftx, 2)
-  right_fit = np.polyfit(righty, rightx, 2)
-
-  return (leftx, rightx, lefty, righty)
-
-def measure_curvature(leftx, rightx, lefty, righty):
-
-  ploty = np.linspace(0, 719, num=720)
-  #quadratic_coeff = 3e-4
-
-  #leftx = np.array([200 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51) 
-  #                            for y in ploty])
-  #rightx = np.array([900 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51) 
-  #                              for y in ploty])
-
-  leftx = leftx[::-1]
-  rightx = rightx[::-1]
-
+  # meter per pixels, correction factor
   ym_per_pix = 30/720
   xm_per_pix = 3.7/700
 
-  #left_fit = np.polyfit(ploty, leftx, 2)
-  #left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
-  #right_fit = np.polyfit(ploty, rightx, 2)
-  #right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
+  # fit second order polynomial to left lane pixels
+  left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
+  # and calculate x coordinate
+  left_fitx = left_fit_cr[0]*lefty**2 + left_fit_cr[1]*lefty + left_fit_cr[2]
+  # same for right lane pixels
+  right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
+  right_fitx = right_fit_cr[0]*righty**2 + right_fit_cr[1]*righty + right_fit_cr[2]
 
-  left_fit_cr = np.polyfit(ploty*ym_per_pix, leftx*xm_per_pix, 2)
-  left_fitx = left_fit_cr[0]*ploty**2 + left_fit_cr[1]*ploty + left_fit[2]
-  right_fit_cr = np.polyfit(ploty*ym_per_pix, rightx*xm_per_pix, 2)
-  right_fitx = right_fit_cr[0]*ploty**2 + right_fit_cr[1]*ploty + right_fit[2]
+  return (lefty, righty, left_fitx, right_fitx, left_fit_cr, right_fit_cr)
 
+def measure_curvature(lefty, righty, left_fitx, right_fitx, left_fit_cr, right_fit_cr):
 
-  y_eval = np.max(ploty)
-  #left_curverad = ((1 + (2*left_fit[0]*y_eval + left_fit[1])**2)**1.5) / np.absolute(2*left_fit[0])
-  #right_curverad = ((1 + (2*right_fit[0]*y_eval + right_fit[1])**2)**1.5) / np.absolute(2*right_fit[0])
+  # flip x side upside down to match y side
+  #leftx = leftx[::-1]
+  #rightx = rightx[::-1]
 
-
+  y_eval = np.max(lefty)
   
-  left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
-  right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+  # use the polynomial we calculated earlier (in the left_fit_cr / right_fit_cr variables)
+  # to calculate the curve radius according to:
+  # http://www.intmath.com/applications-differentiation/8-radius-curvature.php
+  left_curverad = ((1 + (2*left_fit_cr[0]*y_eval + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+  right_curverad = ((1 + (2*right_fit_cr[0]*y_eval + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
 
+  return()
 
-
-  return(ploty, left_fitx, right_fitx)
-
-def draw_lane_on_image(original_image, warped_image, ploty, left_fitx, right_fitx, Minv):
+def draw_lane_on_image(original_image, warped_image, lefty, left_fitx, righty, right_fitx, Minv):
 
   # prepare empty (black) warped image:
   warp_zero = np.zeros_like(warped_image).astype(np.uint8)
   color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
 
   # transform x and y lane boundaries so they can be used with fillPoly
-  pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
-  pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+  pts_left = np.array([np.transpose(np.vstack([left_fitx, lefty]))])
+  pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, righty])))])
   pts = np.hstack((pts_left, pts_right))
 
   # draw lane poly:
@@ -344,11 +328,11 @@ def process_image(image):
   # Perspective transform lane lines to straighten them
   (image3, M, Minv) = unwarp_picture(image2)
 
-  (leftx, rightx, lefty, righty) = find_lines(image3)
-  (ploty, left_fitx, right_fitx) = measure_curvature(leftx, rightx, lefty, righty)
+  (lefty, righty, left_fitx, right_fitx, left_fit_cr, right_fit_cr) = find_lines(image3)
+  measure_curvature(lefty, righty, left_fitx, right_fitx, left_fit_cr, right_fit_cr)
 
   #img_test = cv2.cvtColor(img_undist, cv2.COLOR_RGB2GRAY)
-  image4 = draw_lane_on_image(img_undist, image3, ploty, left_fitx, right_fitx, Minv)
+  image4 = draw_lane_on_image(img_undist, image3, lefty, left_fitx, righty, right_fitx, Minv)
 
   return image4
 
