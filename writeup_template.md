@@ -83,9 +83,7 @@ To identify the lane pixels, I used a histogram to detect the start, and sliding
 
 ####5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I calculated the curvature radius in the function measure_curvature. 
-
-The calculated 
+I calculated the curvature radius in the function measure_curvature, 
 
 ####6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
