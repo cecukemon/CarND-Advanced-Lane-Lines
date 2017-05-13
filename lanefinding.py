@@ -266,17 +266,17 @@ def find_lines(binary_warped):
   left_fit = np.polyfit(lefty, leftx, 2)
   right_fit = np.polyfit(righty, rightx, 2)
 
-  return (left_fit, right_fit)
+  return (leftx, rightx, lefty, righty)
 
-def measure_curvature(left_fit, right_fit):
+def measure_curvature(leftx, rightx, lefty, righty):
 
   ploty = np.linspace(0, 719, num=720)
-  quadratic_coeff = 3e-4
+  #quadratic_coeff = 3e-4
 
-  leftx = np.array([200 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51) 
-                              for y in ploty])
-  rightx = np.array([900 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51) 
-                                for y in ploty])
+  #leftx = np.array([200 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51) 
+  #                            for y in ploty])
+  #rightx = np.array([900 + (y**2)*quadratic_coeff + np.random.randint(-50, high=51) 
+  #                              for y in ploty])
 
   leftx = leftx[::-1]
   rightx = rightx[::-1]
@@ -344,8 +344,8 @@ def process_image(image):
   # Perspective transform lane lines to straighten them
   (image3, M, Minv) = unwarp_picture(image2)
 
-  (left_fit, right_fit) = find_lines(image3)
-  (ploty, left_fitx, right_fitx) = measure_curvature(left_fit, right_fit)
+  (leftx, rightx, lefty, righty) = find_lines(image3)
+  (ploty, left_fitx, right_fitx) = measure_curvature(leftx, rightx, lefty, righty)
 
   #img_test = cv2.cvtColor(img_undist, cv2.COLOR_RGB2GRAY)
   image4 = draw_lane_on_image(img_undist, image3, ploty, left_fitx, right_fitx, Minv)
