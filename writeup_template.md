@@ -113,6 +113,7 @@ Things that could be improved:
 - pickle and save camera calibration data between program runs to save time (I'm working on an antique Macbook air)
 - understand why the camera calibration on real images leads to weird color
 - try more treshholding parameters and combinations of filters and optimize the rsult
-- the perspective transform results are suboptimal
+- the perspective transform results are suboptimal, this makes the lane prediction results bad
 - didn't have time to implement a class to keep track of relevant parameters between frames
+- the lane prediction is rather jumpy
 
