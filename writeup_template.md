@@ -106,8 +106,6 @@ Here's a [link to my video result](./output_2.mp4)
 
 ###Discussion
 
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
-
 Steps where I had issues:
 - wasted a lot of time debugging issues due to wrong file format because I had saved some test frames as PNG instead of JPG, and the alpha channel made for some weird bugs
 - had some problems figuring out the perspective transform steps
