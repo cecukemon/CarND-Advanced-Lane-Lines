@@ -64,12 +64,12 @@ Here's an example of threshholding gradient in X:
 Here's an example of threshholding color:
 ![alt text][image4]
 
-Here's an example of the combined images:
+Here's an example of the combined images, using all computed threshholds:
 ![alt text][image5]
 
 ####3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-To do the perspective transform, I wrote a function unwarp_picture which uses cv2.getPerspectiveTransform and cv2.warpPerspective to warp the image. For the src and dst points, I took a still frame from the video 
+To do the perspective transform, I wrote a function unwarp_picture which uses cv2.getPerspectiveTransform and cv2.warpPerspective to warp the image. For the src and dst points, I took a still frame from the video from a section where the road was straight, and measured the pixel positions, and hardcoded them.
 
   src = np.float32([ [560,460], [730,460], [1100,680], [230,680]])
   dst = np.float32([ [230,460], [1100,460], [1100,680], [230,680]])
@@ -79,19 +79,20 @@ Here's an example of the transformed frame:
 
 ####4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
-
-![alt text][image5]
+To identify the lane pixels, I used a histogram to detect the start, and sliding windows to follow the line. I computed a histogram of the pixels on the lower half of the transformed image, adding up the pixels to find the starting point for the sliding windows. The peaks are likely the left and the right lane starting point. I then set up an array of sliding windows to follow the peaks on each iteration. Finally, I fitted the line points with a polynomial using the numpy polyfit function.
 
 ####5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `my_other_file.py`
+I calculated the curvature radius in the function measure_curvature. 
+
+The calculated 
 
 ####6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+I implemented this step in the function draw_lane_on_image
 
-![alt text][image6]
+
+![alt text][image7]
 
 ---
 
@@ -99,7 +100,7 @@ I implemented this step in lines # through # in my code in `yet_another_file.py`
 
 ####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./output_2.mp4)
 
 ---
 
@@ -107,5 +108,12 @@ Here's a [link to my video result](./project_video.mp4)
 
 ####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+Steps where I had issues:
+- wasted a lot of time debugging issues due to wrong file format because I had saved some test frames as PNG instead of JPG, and the alpha channel made for some weird bugs
+- had some problems figuring out the perspective transform step
+
+
+Things that could be improved:
+- pickle and save camera calibration data between program runs to save time (I'm working on an antique Macbook air)
+- understand why the camera calibration on real images leads to weird color
 
