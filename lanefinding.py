@@ -5,6 +5,8 @@ import matplotlib.image as mpimg
 import glob
 import pprint
 from moviepy.editor import VideoFileClip
+import pickle
+import os.path
 
 ### GLOBALS ###
 
@@ -96,8 +98,11 @@ def unwarp_picture(img):
   imgshape = img.shape[::-1]
 
   # source - coordinates taken from still frame with straight road part:
-  src = np.float32([ [560,460], [730,460], [1100,680], [230,680]])
-  dst = np.float32([ [230,460], [1100,460], [1100,680], [230,680]])
+  #src = np.float32([ [560,460], [730,460], [1100,680], [230,680]])
+  #dst = np.float32([ [230,460], [1100,460], [1100,680], [230,680]])
+
+  src = np.float32([ [500,500], [840,500], [1110,650], [230,650]])
+  dst = np.float32([ [230,500], [1110,500], [1110,650], [230,650]])
 
   # calculate transformation matrix
   M = cv2.getPerspectiveTransform(src, dst)
@@ -151,17 +156,31 @@ def dir_threshold(sobelx, sobely, thresh):
 
     return img_out
 
-# threshholding - color gradient, S channel (saturation)
-def color_threshhold_s(img, thresh):
+# threshholding - color gradient
+def color_threshhold(img, thresh_l, thresh_b):
 
   # convert to HLS color space
   hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
   s_channel = hls[:,:,2]
 
+  luv = cv2.cvtColor(img, cv2.COLOR_BGR2LUV)
+  l_channel = luv[:,:,0]
+
+  bgr = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+  b_channel = bgr[:,:,2]   
+
+
   # initialize empty (black) image
-  img_out = np.zeros_like(s_channel)
+  img_b = np.zeros_like(b_channel)
   # and set all pixels that fall between threshhold boundaries
-  img_out[(s_channel >= thresh[0]) & (s_channel <= thresh[1])] = 255
+  img_b[(b_channel >= thresh_b[0]) & (b_channel <= thresh_b[1])] = 255
+
+  # same with L channel
+  img_l = np.zeros_like(b_channel)
+  img_l[(l_channel >= thresh_l[0]) & (l_channel <= thresh_l[1])] = 255
+
+  img_out = np.zeros_like(b_channel)
+  img_out[(img_l == 255) | (img_b == 255)] = 255
 
   return img_out
 
@@ -169,25 +188,25 @@ def threshholding(img):
     img2 = np.copy(img)
 
     # turn image into greyscale
-    gray_x = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
-    gray_y = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
+    #gray_x = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
+    #gray_y = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
     #cv2.imwrite('frame_gray.jpg',gray)
 
     # sobel kernel size, larger is smoother
-    ksize = 3
+    #ksize = 3
 
     # preprocess sobel kernel on grayscale image for both directions
-    sx = cv2.Sobel(gray_x, cv2.CV_64F, 1, 0, ksize)
-    sy = cv2.Sobel(gray_y, cv2.CV_64F, 0, 1, ksize)
+    #sx = cv2.Sobel(gray_x, cv2.CV_64F, 1, 0, ksize)
+    #sy = cv2.Sobel(gray_y, cv2.CV_64F, 0, 1, ksize)
 
     # calculate images with various threshhold filters
     # threshhold gradient x / gradient y
-    grad_x = abs_sobel_thresh('x', sx, sy, thresh=(20, 100))
-    grad_y = abs_sobel_thresh('y', sx, sy, thresh=(20, 100))
+    #grad_x = abs_sobel_thresh('x', sx, sy, thresh=(20, 100))
+    #grad_y = abs_sobel_thresh('y', sx, sy, thresh=(20, 100))
     # threshhold magniture
-    mag_t = mag_threshhold(sx, sy, thresh=(20, 100))
+    #mag_t = mag_threshhold(sx, sy, thresh=(20, 100))
     # threshhold direction
-    dir_t = dir_threshold(sx, sy, thresh=(0.7, 1.3))
+    #dir_t = dir_threshold(sx, sy, thresh=(0.7, 1.3))
 
     #cv2.imwrite('frame_grad_x.png',grad_x)
     #cv2.imwrite('frame_grad_y.png',grad_y)
@@ -195,18 +214,18 @@ def threshholding(img):
     #cv2.imwrite('frame_dir_t.png', dir_t)
 
     # and combine the filters for a better result:
-    combined = np.zeros_like(dir_t)
-    combined[((grad_x == 255) & (grad_y == 255)) | ((mag_t == 255) & (dir_t == 255))] = 255
+    #combined = np.zeros_like(dir_t)
+    #combined[((grad_x == 255) & (grad_y == 255)) | ((mag_t == 255) & (dir_t == 255))] = 255
 
-    color_t = color_threshhold_s(img2, thresh=(170,255))
+    color_t = color_threshhold(img2, thresh_l=(220,255), thresh_b=(160,205))
 
-    cv2.imwrite('frame_color_t.png', color_t)
+    #cv2.imwrite('frame_color_t.png', color_t)
 
     # combine with color threshhold result:
-    combined2 = np.zeros_like(dir_t)
-    combined2[(combined == 255) | (color_t == 255)] = 255
+    #combined2 = np.zeros_like(dir_t)
+    #combined2[(combined == 255) | (color_t == 255)] = 255
 
-    return combined2
+    return color_t
 
 def find_lines(binary_warped):
 
@@ -327,6 +346,7 @@ def process_image(image):
 
   # Perspective transform lane lines to straighten them
   (image3, M, Minv) = unwarp_picture(image2)
+  cv2.imwrite('frame_unwarped.png', image3)
 
   (lefty, righty, left_fitx, right_fitx, left_fit_cr, right_fit_cr) = find_lines(image3)
   measure_curvature(lefty, righty, left_fitx, right_fitx, left_fit_cr, right_fit_cr)
@@ -338,15 +358,33 @@ def process_image(image):
 
 ### MAIN ###
 
+
+
 # Calibrate camera:
-mtx, dist, newcameramtx = calibrate_camera()
+if(os.path.isfile("mtx.p")):
+  print("pickled camera calibration found!")
+  mtx = pickle.load(open("mtx.p", "rb"))
+  dist = pickle.load(open("dist.p", "rb"))
+  newcameramtx = pickle.load(open("newcameramtx.p", "rb"))
+else:
+  print("no pickled camera calibration found, calibrating ...")
+  mtx, dist, newcameramtx = calibrate_camera()
+  pickle.dump( mtx, open("mtx.p", "wb"))
+  pickle.dump( dist, open("dist.p", "wb"))
+  pickle.dump( newcameramtx, open("newcameramtx.p", "wb"))
+
+
+img = cv2.imread('frame_first.jpg')
+imgp = process_image(img)
+cv2.imwrite('frame_processed.jpg', imgp)
+
 
 # read and process video:
-clip1 = VideoFileClip("project_video.mp4")
-output_clip = clip1.fl_image(process_image)
+#clip1 = VideoFileClip("project_video.mp4")
+#output_clip = clip1.fl_image(process_image)
 
 # write processed video with lane lines:
-output_clip.write_videofile('output.mp4', audio=False)
+#output_clip.write_videofile('output.mp4', audio=False)
 
 
 
